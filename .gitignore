@@ -1,0 +1,18 @@
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+build/
+app/build/
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Signing material — never commit these.
+/keystore/
+/keystore.properties
+
+# Release artefacts are attached to GitHub Releases, not committed.
+*.apk
