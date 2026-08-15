@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ear Auto Answer — raise your phone, answer the call</title>
+<meta name="description" content="An open-source Android app that answers an incoming call when you raise your phone to your ear — and refuses to answer from a pocket. Kotlin, no network access, MIT.">
+<meta property="og:title" content="Ear Auto Answer">
+<meta property="og:description" content="Answers when you raise the phone to your ear. Refuses from a pocket. Open source, no network access.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;400;600;800&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%230F1B2A'/%3E%3Cpath d='M30 34c-2 4-1 9 1 12l-5 5c-3-3-7-3-11-1s-5 6-4 10c4 11 12 20 23 23 4 1 8-1 10-5s1-9-2-11l5-5c4 3 8 3 12 1s5-6 4-10c-4-11-12-20-23-23-4-1-8 1-10 4z' fill='%237FD4A2'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --ink:#06070A;
+    --ink-2:#0C0E13;
+    --panel:#10141B;
+    --line:rgba(127,212,162,.14);
+    --line-soft:rgba(255,255,255,.07);
+    --phos:#7FD4A2;
+    --phos-dim:#4E9E77;
+    --sig:#4C8FE8;
+    --warn:#E8B04C;
+    --reject:#E8735A;
+    --text:#D9E2DD;
+    --muted:#7A8A85;
+    --faint:#4A5854;
+    --mono:'Martian Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:'IBM Plex Sans',system-ui,sans-serif;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;overflow-x:hidden}
+  body{
+    background:var(--ink);
+    color:var(--text);
+    font-family:var(--sans);
+    font-weight:300;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+
+  /* ---- atmosphere ------------------------------------------------------ */
+  .grid-bg{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:
+      linear-gradient(var(--line-soft) 1px,transparent 1px),
+      linear-gradient(90deg,var(--line-soft) 1px,transparent 1px);
+    background-size:72px 72px;
+    mask-image:radial-gradient(ellipse 90% 70% at 50% 0%,#000 20%,transparent 78%);
+    opacity:.55;
+  }
+  .glow{
+    position:fixed;z-index:0;pointer-events:none;border-radius:50%;filter:blur(120px);
+  }
+  .glow-a{top:-18vh;left:8vw;width:52vw;height:52vw;background:rgba(127,212,162,.10)}
+  .glow-b{top:34vh;right:-14vw;width:44vw;height:44vw;background:rgba(76,143,232,.09)}
+  .grain{
+    position:fixed;inset:0;z-index:2;pointer-events:none;opacity:.22;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+  }
+
+  .wrap{position:relative;z-index:1;max-width:1140px;margin:0 auto;padding:0 28px}
+
+  /* ---- nav ------------------------------------------------------------- */
+  nav{
+    position:sticky;top:0;z-index:20;
+    backdrop-filter:blur(14px);
+    background:linear-gradient(to bottom,rgba(6,7,10,.94),rgba(6,7,10,.7));
+    border-bottom:1px solid var(--line-soft);
+  }
+  .nav-in{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:15px 0}
+  .brand{display:flex;align-items:center;gap:11px;font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--phos);box-shadow:0 0 12px var(--phos);animation:blip 2.6s ease-in-out infinite}
+  @keyframes blip{0%,100%{opacity:1}50%{opacity:.28}}
+  .nav-links{display:flex;gap:26px;font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase}
+  .nav-links a{color:var(--muted);text-decoration:none;transition:color .25s}
+  .nav-links a:hover{color:var(--phos)}
+  @media(max-width:720px){.nav-links a:not(.gh){display:none}}
+
+  /* ---- type ------------------------------------------------------------ */
+  h1{
+    font-family:var(--mono);font-weight:800;
+    font-size:clamp(2.1rem,6.4vw,4.6rem);
+    line-height:.98;letter-spacing:-.045em;color:#F2F7F4;
+  }
+  h2{
+    font-family:var(--mono);font-weight:600;
+    font-size:clamp(1.45rem,3.3vw,2.3rem);
+    line-height:1.1;letter-spacing:-.035em;color:#EDF3F0;
+  }
+  h3{font-family:var(--mono);font-weight:600;font-size:.95rem;letter-spacing:-.01em;color:#E6EDE9}
+  p{color:var(--muted);font-size:1.02rem}
+  .lede{font-size:clamp(1.02rem,1.9vw,1.24rem);color:#A9B8B2;max-width:60ch;font-weight:300}
+  strong{color:var(--text);font-weight:500}
+  code{font-family:var(--mono);font-size:.84em;color:var(--phos);background:rgba(127,212,162,.09);padding:.13em .42em;border-radius:3px}
+
+  .tag{
+    display:inline-flex;align-items:center;gap:9px;
+    font-family:var(--mono);font-size:10px;letter-spacing:.17em;text-transform:uppercase;
+    color:var(--phos-dim);border:1px solid var(--line);border-radius:100px;padding:6px 14px;
+  }
+  .sec-no{
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;color:var(--faint);
+    display:block;margin-bottom:14px;
+  }
+
+  section{padding:96px 0;position:relative}
+  section+section{border-top:1px solid var(--line-soft)}
+  @media(max-width:720px){section{padding:64px 0}}
+
+  /* ---- hero ------------------------------------------------------------ */
+  .hero{padding:84px 0 72px}
+  .hero h1{margin:22px 0 24px}
+  .hero h1 em{font-style:normal;color:var(--phos);text-shadow:0 0 34px rgba(127,212,162,.4)}
+  .cta-row{display:flex;flex-wrap:wrap;gap:13px;margin-top:34px}
+  .btn{
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;
+    text-decoration:none;padding:13px 22px;border-radius:4px;transition:all .25s;
+    display:inline-flex;align-items:center;gap:9px;border:1px solid transparent;
+  }
+  .btn-p{background:var(--phos);color:#06120C;font-weight:600}
+  .btn-p:hover{background:#9BE4BB;transform:translateY(-2px);box-shadow:0 10px 30px -10px rgba(127,212,162,.55)}
+  .btn-s{border-color:var(--line);color:var(--text)}
+  .btn-s:hover{border-color:var(--phos);color:var(--phos);transform:translateY(-2px)}
+  .meta-row{
+    display:flex;flex-wrap:wrap;gap:9px 26px;margin-top:30px;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--faint);text-transform:uppercase;
+  }
+  .meta-row span{display:inline-flex;align-items:center;gap:7px}
+  .meta-row span::before{content:'';width:4px;height:4px;background:var(--phos-dim);border-radius:50%}
+
+  /* ---- scope ----------------------------------------------------------- */
+  .scope{
+    margin-top:56px;border:1px solid var(--line);border-radius:9px;
+    background:linear-gradient(180deg,rgba(16,20,27,.94),rgba(8,10,14,.94));
+    overflow:hidden;position:relative;
+  }
+  .scope-head{
+    display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:12px 18px;border-bottom:1px solid var(--line-soft);
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint);
+  }
+  .scope-body{padding:6px 0 0}
+  .scope svg{display:block;width:100%;height:auto}
+  .trace{
+    fill:none;stroke:var(--phos);stroke-width:1.6;
+    stroke-dasharray:1400;stroke-dashoffset:1400;
+    filter:drop-shadow(0 0 6px rgba(127,212,162,.6));
+    animation:draw 3.4s cubic-bezier(.5,0,.2,1) .5s forwards;
+  }
+  @keyframes draw{to{stroke-dashoffset:0}}
+  .thresh{stroke:var(--warn);stroke-width:1;stroke-dasharray:4 5;opacity:.5}
+  .evt line{stroke:var(--line);stroke-width:1}
+  .evt text{font-family:var(--mono);font-size:8px;letter-spacing:.1em;fill:var(--faint)}
+  .evt.hit text{fill:var(--phos)}
+  .evt.hit line{stroke:rgba(127,212,162,.4)}
+  .scope-foot{
+    display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line-soft);
+  }
+  .scope-foot div{padding:13px 16px;border-right:1px solid var(--line-soft)}
+  .scope-foot div:last-child{border-right:none}
+  .scope-foot dt{font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+  .scope-foot dd{font-family:var(--mono);font-size:15px;color:var(--phos);font-weight:600}
+  @media(max-width:640px){.scope-foot{grid-template-columns:repeat(2,1fr)}.scope-foot div:nth-child(2){border-right:none}}
+
+  /* ---- generic panels -------------------------------------------------- */
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  @media(max-width:860px){.grid-2,.grid-3{grid-template-columns:1fr}}
+
+  /* A grid item's default min-width is auto, so a wide <pre> inside one stretches
+     the whole track and scrolls the page sideways instead of scrolling itself.
+     min-width:0 lets the track shrink and hands the overflow back to the <pre>. */
+  .grid-2>*,.grid-3>*,.split>*{min-width:0}
+  .card,.verdict,.log{min-width:0;overflow:hidden}
+  .card pre,.verdict pre,.log pre{max-width:100%}
+
+  .card{
+    border:1px solid var(--line-soft);border-radius:8px;padding:26px;
+    background:linear-gradient(180deg,rgba(16,20,27,.62),rgba(10,12,17,.62));
+    transition:border-color .3s,transform .3s;
+  }
+  .card:hover{border-color:var(--line);transform:translateY(-3px)}
+  .card h3{margin-bottom:10px}
+  .card p{font-size:.94rem}
+  .card .k{
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--phos-dim);display:block;margin-bottom:13px;
+  }
+
+  .split{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:52px;align-items:start}
+  @media(max-width:920px){.split{grid-template-columns:1fr;gap:34px}}
+
+  /* ---- signal rows ----------------------------------------------------- */
+  .sig-row{
+    display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;
+    padding:22px 0;border-bottom:1px solid var(--line-soft);
+  }
+  .sig-row:last-child{border-bottom:none}
+  .sig-badge{
+    font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+    padding:7px 11px;border-radius:4px;white-space:nowrap;font-weight:600;
+  }
+  .b-motion{background:rgba(76,143,232,.13);color:var(--sig);border:1px solid rgba(76,143,232,.28)}
+  .b-prox{background:rgba(127,212,162,.13);color:var(--phos);border:1px solid rgba(127,212,162,.3)}
+  .b-still{background:rgba(232,176,76,.13);color:var(--warn);border:1px solid rgba(232,176,76,.3)}
+  .sig-row p{font-size:.95rem;margin-top:5px}
+
+  /* ---- verdict cards --------------------------------------------------- */
+  .verdict{border:1px solid var(--line-soft);border-radius:8px;overflow:hidden;background:rgba(10,12,17,.55)}
+  .verdict-top{display:flex;align-items:center;gap:11px;padding:15px 18px;border-bottom:1px solid var(--line-soft)}
+  .pill{font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;padding:4px 9px;border-radius:3px;font-weight:600}
+  .p-no{background:rgba(232,115,90,.14);color:var(--reject);border:1px solid rgba(232,115,90,.3)}
+  .p-yes{background:rgba(127,212,162,.14);color:var(--phos);border:1px solid rgba(127,212,162,.32)}
+  .verdict-top strong{font-family:var(--mono);font-size:.83rem;font-weight:400;color:var(--text)}
+  .verdict pre{
+    margin:0;padding:15px 18px;font-family:var(--mono);font-size:10.5px;line-height:1.85;
+    color:var(--faint);overflow-x:auto;
+  }
+  .verdict pre b{color:var(--reject);font-weight:400}
+  .verdict pre i{color:var(--phos);font-style:normal}
+
+  /* ---- table ----------------------------------------------------------- */
+  .tbl{width:100%;border-collapse:collapse;font-size:.92rem}
+  .tbl th{
+    text-align:left;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);font-weight:400;padding:0 14px 11px 0;border-bottom:1px solid var(--line-soft);
+  }
+  .tbl td{padding:13px 14px 13px 0;border-bottom:1px solid var(--line-soft);vertical-align:top;color:var(--muted)}
+  .tbl td:first-child{font-family:var(--mono);font-size:.79rem;color:var(--text);white-space:nowrap}
+  @media(max-width:640px){.tbl td:first-child{white-space:normal}}
+
+  /* ---- log block ------------------------------------------------------- */
+  .log{
+    border:1px solid var(--line-soft);border-radius:8px;background:#080A0E;overflow:hidden;
+  }
+  .log-head{
+    padding:11px 16px;border-bottom:1px solid var(--line-soft);
+    font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint);
+  }
+  .log pre{margin:0;padding:16px;font-family:var(--mono);font-size:10.5px;line-height:1.95;color:var(--muted);overflow-x:auto}
+  .log pre .hl{color:var(--reject)}
+  .log pre .ok{color:var(--phos)}
+  .log pre .dim{color:var(--faint)}
+
+  /* ---- footer ---------------------------------------------------------- */
+  footer{padding:70px 0 54px;border-top:1px solid var(--line-soft)}
+  .foot-in{display:flex;flex-wrap:wrap;gap:26px;justify-content:space-between;align-items:flex-end}
+  .foot-in p{font-family:var(--mono);font-size:10px;letter-spacing:.09em;color:var(--faint);text-transform:uppercase}
+  .foot-in a{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--line);transition:color .25s}
+  .foot-in a:hover{color:var(--phos)}
+
+  /* ---- reveal ----------------------------------------------------------
+     Content is visible by DEFAULT. The hidden state is applied only once
+     JS has confirmed it can run and un-hide it again, so a scripting
+     failure leaves a fully readable page rather than a blank one.        */
+  html.js .rv{opacity:0;transform:translateY(22px);transition:opacity .8s cubic-bezier(.2,.7,.3,1),transform .8s cubic-bezier(.2,.7,.3,1)}
+  html.js .rv.in{opacity:1;transform:none}
+  @media(prefers-reduced-motion:reduce){
+    html.js .rv{opacity:1;transform:none;transition:none}
+    .trace{animation:none;stroke-dashoffset:0}
+    .dot{animation:none}
+  }
+</style>
+</head>
+<body>
+<script>
+  // Opt into the reveal animation only if IntersectionObserver exists. Without
+  // this the page would rely on JS to become visible at all.
+  if ('IntersectionObserver' in window) document.documentElement.classList.add('js');
+</script>
+
+<div class="grid-bg"></div>
+<div class="glow glow-a"></div>
+<div class="glow glow-b"></div>
+<div class="grain"></div>
+
+<nav>
+  <div class="wrap nav-in">
+    <div class="brand"><span class="dot"></span> Ear&nbsp;Auto&nbsp;Answer</div>
+    <div class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#refuses">What it refuses</a>
+      <a href="#build">Build</a>
+      <a class="gh" href="https://github.com/ahkamboh/ear-auto-answer">GitHub ↗</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ============================= HERO ============================= -->
+<header class="wrap hero">
+  <span class="tag">Android · Kotlin · MIT</span>
+  <h1>Raise your phone.<br>The call <em>answers itself.</em></h1>
+  <p class="lede">
+    Pick the phone up, bring it to your ear, and the call connects. No swipe, no tap.
+    What makes it trustworthy is not that it answers — it is everything it
+    <strong>refuses</strong> to answer.
+  </p>
+
+  <div class="cta-row">
+    <a class="btn btn-p" href="https://github.com/ahkamboh/ear-auto-answer/releases/latest">Download APK ↓</a>
+    <a class="btn btn-s" href="https://github.com/ahkamboh/ear-auto-answer">Read the source</a>
+  </div>
+
+  <div class="meta-row">
+    <span>Android 13+</span>
+    <span>No network access</span>
+    <span>Root not required</span>
+    <span>38 unit tests</span>
+  </div>
+
+  <!-- oscilloscope -->
+  <div class="scope">
+    <div class="scope-head">
+      <span>Accelerometer · one raise-to-ear gesture</span>
+      <span>m/s² deviation from 1g</span>
+    </div>
+    <div class="scope-body">
+      <svg viewBox="0 0 900 230" preserveAspectRatio="none" role="img" aria-label="Sensor trace showing a flat line, a large movement spike as the phone is lifted, then a return to stillness as it rests at the ear">
+        <!-- pickup threshold -->
+        <line class="thresh" x1="0" y1="120" x2="900" y2="120"></line>
+        <text x="8" y="114" font-family="Martian Mono" font-size="8" fill="#E8B04C" letter-spacing="1">PICKUP ≥ 2.0</text>
+        <!-- settle threshold -->
+        <line class="thresh" x1="0" y1="176" x2="900" y2="176" style="stroke:#7FD4A2"></line>
+        <text x="8" y="170" font-family="Martian Mono" font-size="8" fill="#4E9E77" letter-spacing="1">SETTLE ≤ 1.5</text>
+
+        <!-- event markers -->
+        <g class="evt">
+          <line x1="150" y1="16" x2="150" y2="214"></line>
+          <text x="156" y="28">RING · SENSORS ON</text>
+        </g>
+        <g class="evt hit">
+          <line x1="300" y1="16" x2="300" y2="214"></line>
+          <text x="306" y="28">PICKUP</text>
+        </g>
+        <g class="evt hit">
+          <line x1="560" y1="16" x2="560" y2="214"></line>
+          <text x="566" y="28">PROXIMITY NEAR</text>
+        </g>
+        <g class="evt hit">
+          <line x1="720" y1="16" x2="720" y2="214"></line>
+          <text x="726" y="28">ANSWERED</text>
+        </g>
+
+        <path class="trace" d="M0,200 L60,199 L100,201 L140,200 L160,198
+          L200,196 L240,190 L270,168 L285,96 L300,54 L315,88 L330,42 L345,102
+          L365,66 L385,120 L405,84 L425,140 L450,110 L480,152 L510,138
+          L535,166 L560,158 L580,182 L600,176 L620,190 L645,186 L670,193
+          L695,191 L720,194 L760,193 L800,195 L850,194 L900,195"></path>
+      </svg>
+    </div>
+    <dl class="scope-foot">
+      <div><dt>Ring → answer</dt><dd>1.4 s</dd></div>
+      <div><dt>Gates passed</dt><dd>6 / 6</dd></div>
+      <div><dt>Sensor samples</dt><dd>185</dd></div>
+      <div><dt>Sensors after</dt><dd>OFF</dd></div>
+    </dl>
+  </div>
+</header>
+
+<!-- ============================= PROBLEM ============================= -->
+<section id="why">
+  <div class="wrap split rv">
+    <div>
+      <span class="sec-no">/01 — THE PROBLEM</span>
+      <h2>Proximity alone is not a gesture.</h2>
+    </div>
+    <div>
+      <p style="margin-bottom:18px">
+        Apps in this space have existed for years. Nearly all of them trigger on one thing:
+        the proximity sensor reporting <code>NEAR</code>. That is also exactly what a pocket
+        reports, which is why their reviews are full of people whose phone answered a call
+        from inside their jeans.
+      </p>
+      <p>
+        The sensor cannot tell an ear from a trouser pocket — both are simply
+        <em style="font-style:normal;color:var(--text)">something close to the screen</em>.
+        Treating that as consent is the bug. Here, proximity is never the trigger. It is the
+        last of three checks, and the weakest one.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= HOW ============================= -->
+<section id="how">
+  <div class="wrap">
+    <div class="rv" style="max-width:62ch;margin-bottom:44px">
+      <span class="sec-no">/02 — THE MECHANISM</span>
+      <h2>Three signals, three questions.</h2>
+      <p style="margin-top:16px">Each answers something the others cannot. All three must agree.</p>
+    </div>
+
+    <div class="rv">
+      <div class="sig-row">
+        <span class="sig-badge b-motion">Motion</span>
+        <div>
+          <h3>Did you mean it?</h3>
+          <p>A deliberate lift produces a burst of acceleration well past <code>2.0 m/s²</code>.
+             A phone that has not moved cannot have been picked up, so nothing else is even evaluated.</p>
+        </div>
+      </div>
+      <div class="sig-row">
+        <span class="sig-badge b-prox">Proximity</span>
+        <div>
+          <h3>Is it against something?</h3>
+          <p>Confirmation only — and it is rejected outright unless the sensor was seen
+             <code>FAR</code> <em style="font-style:normal;color:var(--text)">after</em> the call started ringing.
+             A phone covered since before the call can never answer. This one rule kills most pocket cases.</p>
+        </div>
+      </div>
+      <div class="sig-row">
+        <span class="sig-badge b-still">Stillness</span>
+        <div>
+          <h3>An ear, or a pocket?</h3>
+          <p>A phone at your ear has <strong>stopped</strong>. A phone in a pocket on a moving body
+             never does. Measured over a short 300 ms window, because the 800 ms window used for
+             pickup still contains the lift that just happened.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-3 rv" style="margin-top:48px">
+      <div class="card">
+        <span class="k">Timing trap</span>
+        <h3>The window must close first</h3>
+        <p>Validation runs 500 ms after the phone reaches your ear. Measuring stillness over
+           800 ms would always include the lift — making the gate unpassable and every real
+           gesture fail. Two windows, not one.</p>
+      </div>
+      <div class="card">
+        <span class="k">Battery</span>
+        <h3>Sensors off by default</h3>
+        <p>Nothing samples until a call actually rings, and everything unregisters the moment
+           the decision is made. Between calls the app is a suspended callback — no polling,
+           no wakelocks, no timers.</p>
+      </div>
+      <div class="card">
+        <span class="k">Testability</span>
+        <h3>A state machine with no clock</h3>
+        <p>The decision logic is pure Kotlin — no Android imports, time arrives on events,
+           effects leave through a callback. All 38 tests run on the JVM. No emulator, no
+           real phone calls.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= REFUSES ============================= -->
+<section id="refuses">
+  <div class="wrap">
+    <div class="rv" style="max-width:62ch;margin-bottom:40px">
+      <span class="sec-no">/03 — THE GUARDS</span>
+      <h2>What it refuses to do.</h2>
+      <p style="margin-top:16px">
+        Every rejection is logged with the measured value, so when it declines you can see
+        precisely which gate stopped it.
+      </p>
+    </div>
+
+    <div class="grid-2 rv">
+      <div class="verdict">
+        <div class="verdict-top"><span class="pill p-no">Refused</span><strong>Pocket · walking</strong></div>
+        <pre>Proximity → NEAR
+<b>NEAR rejected — sensor covered
+since before the call</b></pre>
+      </div>
+      <div class="verdict">
+        <div class="verdict-top"><span class="pill p-no">Refused</span><strong>Pushed back into pocket</strong></div>
+        <pre>Gesture validation…
+<b>Phone is still moving
+(energy 4.0, want ≤ 1.5)</b></pre>
+      </div>
+      <div class="verdict">
+        <div class="verdict-top"><span class="pill p-no">Refused</span><strong>Table · hand over sensor</strong></div>
+        <pre>Proximity → NEAR
+<b>NEAR rejected — no recent pickup</b></pre>
+      </div>
+      <div class="verdict">
+        <div class="verdict-top"><span class="pill p-no">Refused</span><strong>Face-down on a desk</strong></div>
+        <pre>Gesture validation…
+<b>Phone is face-down
+(tilt 171.4deg)</b></pre>
+      </div>
+    </div>
+
+    <div class="verdict rv" style="margin-top:20px">
+      <div class="verdict-top"><span class="pill p-yes">Answered</span><strong>Picked up from a desk and raised to the ear</strong></div>
+      <pre>Call state → RINGING          <i>sensors registered</i>
+Motion detected — pickup      <i>energy 6.1 ≥ 2.0</i>
+Proximity → NEAR              <i>FAR seen earlier this ring ✓</i>
+NEAR debounce passed          <i>stable for 500 ms</i>
+Gesture validation passed     <i>tilt 84° · settled 0.3 · earpiece up</i>
+<i>Answer successful</i>             <i>sensors unregistered</i></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= PERMISSIONS ============================= -->
+<section id="permissions">
+  <div class="wrap split rv">
+    <div>
+      <span class="sec-no">/04 — PERMISSIONS</span>
+      <h2>Six. And no internet.</h2>
+      <p style="margin-top:16px">
+        There is no network code anywhere in the project. No phone number or contact name
+        is ever read or written to a log.
+      </p>
+    </div>
+    <div>
+      <table class="tbl">
+        <thead><tr><th>Permission</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>READ_PHONE_STATE</td><td>Know when a call is ringing</td></tr>
+          <tr><td>ANSWER_PHONE_CALLS</td><td>Answer it — an ordinary runtime permission since Android 8</td></tr>
+          <tr><td>FOREGROUND_SERVICE<br>+ _SPECIAL_USE</td><td>Stay alive to notice the ring</td></tr>
+          <tr><td>POST_NOTIFICATIONS</td><td>The ongoing notification Android requires of any such service</td></tr>
+          <tr><td>RECEIVE_BOOT_COMPLETED</td><td>Keep working after a reboot</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:20px;font-size:.9rem">
+        <strong>Root is not required.</strong> The root path is an unused fallback — the public
+        telecom API does the work on a stock, unrooted phone.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================= VOIP ============================= -->
+<section id="voip">
+  <div class="wrap">
+    <div class="rv" style="max-width:66ch;margin-bottom:34px">
+      <span class="sec-no">/05 — A HONEST LIMITATION</span>
+      <h2>WhatsApp calls are not supported.</h2>
+      <p style="margin-top:16px">
+        It was built, it was tested on a real device, and it was removed. A VoIP app's answer
+        button is an <strong>activity</strong> PendingIntent — pressing it makes that app open its
+        call screen, and Android judges that launch against <em style="font-style:normal;color:var(--text)">our</em>
+        background privilege, not theirs.
+      </p>
+      <p style="margin-top:14px">
+        The gesture worked perfectly every time. The press was simply discarded.
+      </p>
+    </div>
+
+    <div class="log rv">
+      <div class="log-head">Pixel 9 · Android 17 · app backgrounded · logcat</div>
+<pre><span class="hl">E ActivityTaskManager: Background activity launch blocked!</span>
+  intent: com.whatsapp/.calling.ui.VoipActivityV2 (ACCEPT_CALL)
+  realCallingPackage:   com.example.earautoanswer
+  realCallerStartMode:  MODE_BACKGROUND_ACTIVITY_START_ALLOWED  <span class="dim">← we allowed it</span>
+  balAllowedByPiSender: BSP.ALLOW_BAL                           <span class="dim">← our side agreed</span>
+  <span class="hl">resultIfPiSenderAllowsBal: BAL_BLOCK</span>                       <span class="dim">← blocked anyway</span>
+  <span class="hl">realCallingUidHasVisibleActivity: false</span>
+E ActivityTaskManager: Abort background activity starts</pre>
+    </div>
+    <p class="rv" style="margin-top:18px;font-size:.9rem;max-width:66ch">
+      It works only while the app is open on screen, which is useless for answering calls.
+      Rather than ship something that fails silently, the feature was deleted — and the finding
+      documented so nobody rebuilds it.
+    </p>
+  </div>
+</section>
+
+<!-- ============================= BUILD ============================= -->
+<section id="build">
+  <div class="wrap">
+    <div class="rv" style="max-width:62ch;margin-bottom:38px">
+      <span class="sec-no">/06 — GET IT</span>
+      <h2>Install, or build it yourself.</h2>
+    </div>
+
+    <div class="grid-2 rv">
+      <div class="card">
+        <span class="k">Install</span>
+        <h3>Download the APK</h3>
+        <p style="margin-bottom:16px">
+          Sideloaded, so Android will warn about an unknown developer. Requires Android 13+,
+          a proximity sensor and an accelerometer.
+        </p>
+        <a class="btn btn-p" href="https://github.com/ahkamboh/ear-auto-answer/releases/latest">Latest release ↓</a>
+      </div>
+      <div class="card">
+        <span class="k">Build</span>
+        <h3>Clone and assemble</h3>
+        <p style="margin-bottom:14px">Any JDK 17+. No signing key needed for a debug build.</p>
+        <pre style="font-family:var(--mono);font-size:10.5px;line-height:1.9;color:var(--phos-dim);overflow-x:auto;margin:0">git clone https://github.com/ahkamboh/ear-auto-answer
+cd ear-auto-answer
+./gradlew :app:assembleDebug</pre>
+      </div>
+    </div>
+
+    <div class="card rv" style="margin-top:20px">
+      <span class="k">Calibration</span>
+      <h3>Tune it to your handset before trusting it</h3>
+      <p>
+        Thresholds are set for a Pixel-class phone. Open <strong>Test Sensors</strong>, raise the
+        phone to your ear, and watch <code>settleEnergy</code> — it must fall into the green band
+        within about half a second. If pickup and rest overlap, adjust
+        <code>pickupMovementThreshold</code> and <code>maxSettleMovementEnergy</code> in
+        <code>AutoAnswerConfig.kt</code>. Every tunable value lives in that one file.
+      </p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-in">
+    <div>
+      <p style="margin-bottom:9px">Ear Auto Answer · MIT Licence</p>
+      <p style="color:var(--muted);text-transform:none;letter-spacing:0;font-family:var(--sans);font-size:.92rem">
+        Built by <a href="https://github.com/ahkamboh">Ali Hamza Kamboh</a>
+      </p>
+    </div>
+    <p><a href="https://github.com/ahkamboh/ear-auto-answer">Source ↗</a></p>
+  </div>
+</footer>
+
+<script>
+  // Staggered reveal on scroll.
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) {
+        e.target.style.transitionDelay = (i * 70) + 'ms';
+        e.target.classList.add('in');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+
+  document.querySelectorAll('.rv').forEach(el => io.observe(el));
+</script>
+
+</body>
+</html>
