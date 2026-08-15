@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ear Auto Answer</string>
+    <string name="notification_channel_name">Auto answer active</string>
+    <string name="notification_channel_description">Shown while Ear Auto Answer is watching for incoming calls.</string>
+</resources>

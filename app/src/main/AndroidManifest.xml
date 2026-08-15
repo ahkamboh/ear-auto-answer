@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Call-state monitoring (RINGING / OFFHOOK / IDLE). No number is ever read. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- TelecomManager.acceptRingingCall(). User-grantable runtime permission. -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!--
+      Android 14 requires an FGS type. `phoneCall` is gated behind the default-dialer
+      role / MANAGE_OWN_CALLS, neither of which this app holds, so `specialUse` is the
+      correct type: the service exists to keep sensors sampling while a call rings.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <uses-feature
+        android:name="android.hardware.sensor.proximity"
+        android:required="true" />
+    <uses-feature
+        android:name="android.hardware.sensor.accelerometer"
+        android:required="true" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.EarAutoAnswer">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".service.CallMonitorService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Monitors proximity and accelerometer only while a call is ringing, to answer it when the phone is raised to the ear." />
+        </service>
+
+        <!--
+          Safety net, not a wake-on-call design. Claims no role and no extra
+          permission; it only starts the monitor service if a call rings while the
+          service is missing. ACTION_PHONE_STATE_CHANGED is exempt from the
+          implicit-broadcast ban, so this is delivered even to a cached process.
+        -->
+        <receiver
+            android:name=".boot.PhoneStateWakeReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".boot.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>
